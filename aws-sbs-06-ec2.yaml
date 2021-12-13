@@ -1,0 +1,299 @@
+---
+AWSTemplateFormatVersion: 2010-09-09
+
+Description: Reference CloudFormation Template for SBS I&M - Creates EC2 Auto Scaling group
+
+Metadata:
+
+  Authors:
+    Description: Hakmin Kim (hakmink@amazon.com)
+  License:
+    Description: 'Copyright 2021 Amazon.com, Inc. and its affiliates. All Rights Reserved.
+                  SPDX-License-Identifier: MIT-0'
+
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+    - Label:
+        default: EC2 Parameters
+      Parameters:
+        - EC2KeyName
+        - EC2InstanceType
+        - EC2AsgMax
+        - EC2AsgMin
+        - EC2SecurityGroup
+        - NumberOfSubnets
+        - Subnet
+        - PublicAlbTargetGroupArn
+        - PublicAlbHostname
+        - SslCertificate
+    ParameterLabels:
+      EC2KeyName:
+        default: Existing Key Pair
+      EC2AsgMax:
+        default: EC2 ASG Max
+      EC2AsgMin:
+        default: EC2 ASG Min
+      EC2InstanceType:
+        default: EC2 Instance Type
+      EC2SecurityGroup:
+        default: EC2 Security Group
+      NumberOfSubnets:
+        default: Number of subnets
+      PublicAlbTargetGroupArn:
+        default: Public Alb Target Group Arn
+      PublicAlbHostname:
+        default: Public Alb Hostname
+      SslCertificate:
+        default: ACM Cert attached to Public Alb
+      Subnet:
+        default: Subnets
+
+Parameters:
+
+  NumberOfSubnets:
+    AllowedValues:
+    - 1
+    - 2
+    Default: 2
+    Description: Number of subnets. This must match your selections in the list of subnets below.
+    Type: String 
+  PublicAlbTargetGroupArn:
+    Description: The public application load balancer target group arn.
+    Type: String
+  PublicAlbHostname:
+    Description: The hostname of the public ALB http form (e.g. http://abdc-12345-xyz.<region>.elb.amazonaws.com)
+    Type: String
+  SslCertificate:
+    AllowedValues:
+      - True
+      - False
+    Default: False
+    Description: Is there an ACM SSL Certificate attached to the Public Alb?
+    Type:
+      String
+  Subnet:
+    Description: Select existing subnets. The number selected must match the number of subnets above. Subnets selected must be in separate AZs.
+    Type: List<AWS::EC2::Subnet::Id>
+  EC2KeyName:
+    AllowedPattern: ^([a-zA-Z0-9 @.`~!#$%^&*()_+,\\-])*$
+    ConstraintDescription: Must be letters (upper or lower), numbers, and special characters.
+    Description: Name of an EC2 KeyPair. Your EC2 instances will launch with this KeyPair.
+    Type: AWS::EC2::KeyPair::KeyName
+  EC2AsgMax:
+    AllowedPattern: ^((?!0$)[1-2]?[0-9]|30)$
+    ConstraintDescription: Must be a number between 1 and 30.
+    Default: 4
+    Description: Specifies the maximum number of EC2 instances in the EC2 Autoscaling Group.
+    Type: String
+  EC2AsgMin:
+    AllowedPattern: ^([0-0]?[0-9]|10)$
+    ConstraintDescription: Must be a number between 0 and 10.
+    Default: 2
+    Description: Specifies the minimum number of EC2 instances in the EC2 Autoscaling Group.
+    Type: String
+  EC2InstanceType:
+    AllowedValues:
+    - t3.nano
+    - t3.micro
+    - t3.small
+    - t3.medium
+    - t3.large
+    - t3.xlarge
+    - t3.2xlarge
+    - m3.medium 
+    - m3.large 
+    - m3.xlarge 
+    - m3.2xlarge 
+    - m4.large 
+    - m4.xlarge 
+    - m4.2xlarge 
+    - m4.4xlarge 
+    - m4.10xlarge 
+    - m4.16xlarge 
+    - m5.large 
+    - m5.xlarge 
+    - m5.2xlarge 
+    - m5.4xlarge 
+    - m5.12xlarge 
+    - m5.24xlarge 
+    - c3.large 
+    - c3.xlarge 
+    - c3.2xlarge 
+    - c3.4xlarge 
+    - c3.8xlarge 
+    - c4.large 
+    - c4.xlarge 
+    - c4.2xlarge 
+    - c4.4xlarge 
+    - c4.8xlarge 
+    - c5.large 
+    - c5.xlarge 
+    - c5.2xlarge 
+    - c5.4xlarge 
+    - c5.9xlarge 
+    - c5.18xlarge
+    - r3.large 
+    - r3.xlarge 
+    - r3.2xlarge 
+    - r3.4xlarge 
+    - r3.8xlarge 
+    - r4.large 
+    - r4.xlarge 
+    - r4.2xlarge 
+    - r4.4xlarge 
+    - r4.8xlarge 
+    - r4.16xlarge 
+    - x1.16xlarge 
+    - x1.32xlarge 
+    - x1e.xlarge 
+    - x1e.2xlarge 
+    - x1e.4xlarge 
+    - x1e.8xlarge 
+    - x1e.16xlarge 
+    - x1e.32xlarge
+    - d2.xlarge 
+    - d2.2xlarge 
+    - d2.4xlarge 
+    - d2.8xlarge 
+    - h1.2xlarge 
+    - h1.4xlarge 
+    - h1.8xlarge 
+    - h1.16xlarge 
+    - i2.xlarge 
+    - i2.2xlarge 
+    - i2.4xlarge 
+    - i2.8xlarge 
+    - i3.large 
+    - i3.xlarge 
+    - i3.2xlarge 
+    - i3.4xlarge 
+    - i3.8xlarge 
+    - i3.16xlarge
+    - f1.2xlarge 
+    - f1.16xlarge 
+    - g2.2xlarge 
+    - g2.8xlarge 
+    - g3.4xlarge 
+    - g3.8xlarge 
+    - g3.16xlarge 
+    - p2.xlarge 
+    - p2.8xlarge 
+    - p2.16xlarge 
+    - p3.2xlarge 
+    - p3.8xlarge 
+    - p3.16xlarge
+    ConstraintDescription: Must be a valid Amazon EC2 instance type.
+    Default: c5.large
+    Description: The Amazon EC2 instance type for your EC2 instances.
+    Type: String
+  EC2SecurityGroup:
+    Description: Select the EC2 security group.
+    Type: AWS::EC2::SecurityGroup::Id
+
+Conditions:
+
+  NoSslCertificate:
+    !Equals [ False, !Ref SslCertificate ]
+  NumberOfSubnets1:
+    !Equals [ 1, !Ref NumberOfSubnets ]
+  NumberOfSubnets2:
+    !Equals [ 2, !Ref NumberOfSubnets ]
+  Subnet0: !Or
+    - !Condition NumberOfSubnets1
+    - !Condition NumberOfSubnets2
+  Subnet1: !Condition NumberOfSubnets2
+
+Mappings:
+
+  RegionMap:
+    ap-northeast-1:
+      AMI: ami-0b2c2a754d5b4da22
+    ap-northeast-2:
+      AMI: ami-0493ab99920f410fc
+    us-east-1:
+      AMI: ami-0a52e8a6018e92bb0
+    us-east-2:
+      AMI: ami-027cab9a7bf0155df
+    us-west-1:
+      AMI: ami-088c153f74339f34c
+    us-west-2:
+      AMI: ami-01fee56b22f308154
+
+Resources:
+
+  EC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: /
+      Roles:
+      - !Ref EC2InstanceRole
+  EC2InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - ec2.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      Path: /
+      Policies:
+      - PolicyName: logs
+        PolicyDocument:
+          Version: 2012-10-17
+          Statement:
+          - Effect: Allow
+            Action:
+            - logs:CreateLogGroup
+            - logs:CreateLogStream
+            - logs:PutLogEvents
+            - logs:DescribeLogStreams
+            Resource:
+            - arn:aws:logs:*:*:*
+  EC2AutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      Cooldown: 60
+      HealthCheckGracePeriod: 300
+      MaxInstanceLifetime: 2592000
+      LaunchConfigurationName:
+        !Ref EC2LaunchConfiguration
+      MaxSize: !Ref EC2AsgMax
+      MinSize: !Ref EC2AsgMin
+      DesiredCapacity: !Ref EC2AsgMin
+      Tags:
+        - Key: Name
+          Value: !Join [ '', [ 'EC2 ASG / ', !Ref 'AWS::StackName' ] ]
+          PropagateAtLaunch: true
+      TargetGroupARNs:
+        - !Ref PublicAlbTargetGroupArn
+      VPCZoneIdentifier:
+        !If
+          [ NumberOfSubnets1,
+          [ !Select [ 0, !Ref Subnet ] ],
+          [ !Select [ 0, !Ref Subnet ], !Select [ 1, !Ref Subnet ] ],
+          ]
+  EC2LaunchConfiguration:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+      IamInstanceProfile: !Ref EC2InstanceProfile
+      ImageId: !FindInMap [ RegionMap, !Ref 'AWS::Region', AMI ]
+      InstanceMonitoring: true
+      InstanceType: !Ref EC2InstanceType
+      KeyName: !Ref EC2KeyName
+      SecurityGroups:
+      - !Ref EC2SecurityGroup
+      UserData:
+        "Fn::Base64":
+          !Sub |
+            #!/bin/bash -xe
+            yum update -y
+
+
+Outputs:
+
+  Opcachestatus:
+    Value: !Join [ '', [ !Ref PublicAlbHostname, '/index.html' ] ]

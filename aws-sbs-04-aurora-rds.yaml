@@ -1,0 +1,201 @@
+---
+AWSTemplateFormatVersion: 2010-09-09
+
+Description: Reference CloudFormation Template for SBS I&M - Creates RDS Aurora database cluster
+
+Metadata:
+
+  Authors:
+    Description: Hakmin Kim (hakmink@amazon.com)
+  License:
+    Description: 'Copyright 2021 Amazon.com, Inc. and its affiliates. All Rights Reserved.
+                  SPDX-License-Identifier: MIT-0'
+  
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+    - Label:
+        default: Aurora Database Parameters
+      Parameters:
+        - AuroraDBInstanceType
+        - AuroraDBMasterUsername
+        - AuroraDBMasterPassword
+        - AuroraDBName
+        - AuroraDBEncrpytedBoolean
+        - AuroraDBCmk
+        - AuroraDBSecurityGroup
+        - NumberOfSubnets
+        - Subnet
+    ParameterLabels:
+      AuroraDBEncrpytedBoolean:
+        default: Encrypted Aurora DB Cluster
+      AuroraDBCmk:
+        default: AWS KMS Customer Master Key (CMK) to encrypt Aurora DB
+      AuroraDBInstanceType:
+        default: Aurora DB Instance Class
+      AuroraDBMasterUsername:
+        default: Aurora DB Master Username
+      AuroraDBMasterPassword:
+        default: Aurora DB Master Password
+      AuroraDBRestoreSnapshot:
+        default: Snapshot to restore from
+      AuroraDBName:
+        default: Aurora DB Name
+      AuroraDBSecurityGroup:
+        default: Aurora DB Security Group
+      NumberOfSubnets:
+        default: Number of subnets
+      Subnet:
+        default: Subnets
+
+Parameters:
+
+  AuroraDBEncrpytedBoolean:
+    AllowedValues:
+      - true
+      - false
+    Default: True
+    Description: Indicates whether the Aurora DB instances in the cluster are encrypted.
+    Type: String
+  AuroraDBCmk:
+    Description: AWS KMS Customer Master Key (CMK) to encrypt Aurora database cluster
+    Type: String
+  AuroraDBInstanceType:
+    AllowedValues:
+      - db.r5.large
+      - db.r5.xlarge
+      - db.r5.2xlarge
+      - db.r5.4xlarge
+      - db.r5.8xlarge
+      - db.r5.12large
+      - db.r5.16xlarge
+      - db.r5.24xlarge
+    ConstraintDescription: Must be a valid Aurora RDS instance class.
+    Default: db.r5.xlarge
+    Description: The Amazon RDS database instance class.
+    Type: String
+  AuroraDBMasterUsername:
+    AllowedPattern: ^([a-zA-Z0-9]*)$
+    Description: The Amazon Aurora RDS master username.
+    ConstraintDescription: Must contain only alphanumeric characters (minimum 8; maximum 16).
+    MaxLength: 16
+    MinLength: 8
+    Type: String
+  AuroraDBMasterPassword:
+    AllowedPattern: ^([a-z0-9A-Z`~!#$%^&*()_+,\\-])*$
+    ConstraintDescription: Must be letters (upper or lower), numbers, and these special characters '_'`~!#$%^&*()_+,-    
+    Description: The Amazon Aurora RDS master password.
+    MaxLength: 41
+    MinLength: 8
+    NoEcho: true
+    Type: String
+  AuroraDBName:
+    AllowedPattern: ^([a-zA-Z0-9]*)$
+    Description: The Amazon Aurora RDS master database name.
+    Type: String
+  AuroraDBRestoreSnapshot:
+    Description: The snapshot name to restore from.
+    Type: String
+  AuroraDBSecurityGroup:
+    Description: Select the Aurora database security group.
+    Type: AWS::EC2::SecurityGroup::Id
+  NumberOfSubnets:
+    AllowedValues:
+    - 1
+    - 2
+    Default: 2
+    Description: Number of subnets. This must match your selections in the list of subnets below.
+    Type: String 
+  Subnet:
+    Description: Select existing subnets. The number selected must match the number of subnets above. Subnets selected must be in separate AZs.
+    Type: List<AWS::EC2::Subnet::Id>
+
+Conditions:
+
+  NumberOfSubnets1:
+      !Equals [ 1, !Ref NumberOfSubnets ]
+  NumberOfSubnets2:
+      !Equals [ 2, !Ref NumberOfSubnets ]
+  Subnet0: !Or
+    - !Condition NumberOfSubnets1
+    - !Condition NumberOfSubnets2
+  Subnet1: !Condition NumberOfSubnets2
+  UseAWS-ManagedCMK:
+    !Equals ['', !Ref AuroraDBCmk]
+  NoSnapshot:
+    !Equals ['', !Ref AuroraDBRestoreSnapshot]
+
+Resources:
+
+  AuroraDBCluster:
+    Type: AWS::RDS::DBCluster
+    Properties:
+      BackupRetentionPeriod: 30
+      DatabaseName: !Ref AuroraDBName
+      DBSubnetGroupName: !Ref AuroraDBSubnetGroup
+      Engine: aurora
+      KmsKeyId:
+        !If [ UseAWS-ManagedCMK, !Ref 'AWS::NoValue', !Ref AuroraDBCmk ]
+      MasterUsername: !If [ NoSnapshot, !Ref AuroraDBMasterUsername, !Ref 'AWS::NoValue']
+      MasterUserPassword: !If [ NoSnapshot, !Ref AuroraDBMasterPassword, !Ref 'AWS::NoValue']
+      Port: 3306
+      StorageEncrypted: !Ref AuroraDBEncrpytedBoolean
+      SnapshotIdentifier: !If [ NoSnapshot, !Ref 'AWS::NoValue', !Ref AuroraDBRestoreSnapshot]
+      Tags:
+        - Key: Name
+          Value: !Join [ '', [ 'SBSINM / ', !Ref 'AWS::StackName' ] ]
+      VpcSecurityGroupIds:
+      - !Ref AuroraDBSecurityGroup
+  AuroraDBInstance0:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Delete
+    Properties:
+      AllowMajorVersionUpgrade: false
+      AutoMinorVersionUpgrade: true
+      DBClusterIdentifier: !Ref AuroraDBCluster
+      DBInstanceClass: !Ref AuroraDBInstanceType
+      DBSubnetGroupName: !Ref AuroraDBSubnetGroup
+      Engine: aurora
+      Tags:
+        - Key: Name
+          Value: !Join [ '', [ 'SBSINM / ', !Ref 'AWS::StackName' ] ]
+  AuroraDBInstance1:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Delete
+    Properties:
+      AllowMajorVersionUpgrade: false
+      AutoMinorVersionUpgrade: true
+      DBClusterIdentifier: !Ref AuroraDBCluster
+      DBInstanceClass: !Ref AuroraDBInstanceType
+      DBSubnetGroupName: !Ref AuroraDBSubnetGroup
+      Engine: aurora
+      Tags:
+        - Key: Name
+          Value: !Join [ '', [ 'SBSINM / ', !Ref 'AWS::StackName' ] ]
+  AuroraDBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: RDS Database Subnet Group for SBS InM Solution
+      SubnetIds:
+        !If
+          [ NumberOfSubnets1,
+          [ !Select [ 0, !Ref Subnet ] ],
+          [ !Select [ 0, !Ref Subnet ], !Select [ 1, !Ref Subnet ] ]
+          ]
+      Tags:
+        - Key: Name
+          Value: !Join [ '', [ 'SBSINM / ', !Ref 'AWS::StackName' ] ]
+
+Outputs:
+  AuroraDBCluster:
+    Value: !Ref AuroraDBCluster
+  AuroraDBName:
+    Value: !Ref AuroraDBName
+  AuroraDBInstance0:
+    Value: !Ref AuroraDBInstance0
+  AuroraDBInstance1:
+    Value: !Ref AuroraDBInstance1
+  AuroraDBSubnetGroup:
+    Value: !Ref AuroraDBSubnetGroup
+  AuroraDBClusterEndpointAddress:
+    Value: !GetAtt AuroraDBCluster.Endpoint.Address
+

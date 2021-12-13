@@ -1,0 +1,50 @@
+
+AWSTemplateFormatVersion: 2010-09-09
+
+Description: Reference CloudFormation Template for SBS I&M - Creates S3 Bucket for Static Web
+
+Metadata:
+
+  Authors:
+    Description: Hakmin Kim (hakmink@amazon.com)
+  License:
+    Description: 'Copyright 2021 Amazon.com, Inc. and its affiliates. All Rights Reserved.
+                  SPDX-License-Identifier: MIT-0'
+
+Resources:
+  S3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      AccessControl: PublicRead
+      WebsiteConfiguration:
+        IndexDocument: index.html
+        ErrorDocument: error.html
+    DeletionPolicy: Delete
+  BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      PolicyDocument:
+        Id: MyPolicy
+        Version: 2012-10-17
+        Statement:
+          - Sid: PublicReadForGetBucketObjects
+            Effect: Allow
+            Principal: '*'
+            Action: 's3:GetObject'
+            Resource: !Join
+              - ''
+              - - 'arn:aws:s3:::'
+                - !Ref S3Bucket
+                - /*
+      Bucket: !Ref S3Bucket
+Outputs:
+  WebsiteURL:
+    Value: !GetAtt
+      - S3Bucket
+      - WebsiteURL
+    Description: URL for website hosted on S3
+  S3DomainName:
+    Value: !GetAtt
+      - S3Bucket
+      - DomainName
+    Description: Domain Name of S3 bucket

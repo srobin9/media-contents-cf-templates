@@ -1,0 +1,205 @@
+---
+AWSTemplateFormatVersion: 2010-09-09
+
+Description: Reference CloudFormation Template for SBS I&M - Creates DocumentDB cluster
+
+Metadata:
+
+  Authors:
+    Description: Hakmin Kim (hakmink@amazon.com)
+  License:
+    Description: 'Copyright 2021 Amazon.com, Inc. and its affiliates. All Rights Reserved.
+                  SPDX-License-Identifier: MIT-0'
+  
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+    - Label:
+        default: Document DB Parameters
+      Parameters:
+        - DocumentDBClusterName
+        - DocumentDBInstanceName
+        - DocumentDBMasterUsername
+        - DocumentDBMasterPassword
+        - DocumentDBInstanceType
+        - DocumentDBEncrpytedBoolean
+        - DocumentDBCmk
+        - DocumentDBSecurityGroup
+        - DocumentDBRestoreSnapshot
+        - NumberOfSubnets
+        - Subnet
+    ParameterLabels:
+      DocumentDBClusterName:
+        default: Document DB Cluster Name
+      DocumentDBInstanceName:
+        default: Document DB Instance Name
+      DocumentDBMasterUsername:
+        default: Document DB Master Username
+      DocumentDBMasterPassword:
+        default: Document DB Master Password
+      DocumentDBInstanceType:
+        default: Document DB Instance Class
+      DocumentDBEncrpytedBoolean:
+        default: Encrypted Document DB Cluster
+      DocumentDBCmk:
+        default: AWS KMS Customer Master Key (CMK) to encrypt Document DB
+      DocumentDBRestoreSnapshot:
+        default: Snapshot to restore from
+      DocumentDBSecurityGroup:
+        default: Document DB Security Group
+      NumberOfSubnets:
+        default: Number of subnets
+      Subnet:
+        default: Subnets
+
+Parameters:
+
+  DocumentDBEncrpytedBoolean:
+    AllowedValues:
+      - true
+      - false
+    Default: True
+    Description: Indicates whether the Document DB instances in the cluster are encrypted.
+    Type: String
+  DocumentDBCmk:
+    Description: AWS KMS Customer Master Key (CMK) to encrypt Document database cluster
+    Type: String
+  DocumentDBInstanceType:
+    AllowedValues:
+      - db.r5.large
+      - db.r5.xlarge
+      - db.r5.2xlarge
+      - db.r5.4xlarge
+      - db.r5.8xlarge
+      - db.r5.12large
+      - db.r5.16xlarge
+      - db.r5.24xlarge
+    ConstraintDescription: Must be a valid Document DB instance class.
+    Default: db.r5.xlarge
+    Description: The Amazon Document DB instance class.
+    Type: String
+  DocumentDBMasterUsername:
+    AllowedPattern: ^([a-zA-Z0-9]*)$
+    Description: The Amazon Document DB master username.
+    ConstraintDescription: Must contain only alphanumeric characters (minimum 8; maximum 16).
+    MaxLength: 16
+    MinLength: 8
+    Type: String
+  DocumentDBMasterPassword:
+    AllowedPattern: ^([a-z0-9A-Z`~!#$%^&*()_+,\\-])*$
+    ConstraintDescription: Must be letters (upper or lower), numbers, and these special characters '_'`~!#$%^&*()_+,-    
+    Description: The Amazon Document DB master password.
+    MaxLength: 41
+    MinLength: 8
+    NoEcho: true
+    Type: String
+  DocumentDBClusterName:
+    AllowedPattern: ^([a-zA-Z0-9]*)$
+    Description: The Amazon Document DB Cluster name.
+    Type: String
+  DocumentDBInstanceName:
+    AllowedPattern: ^([a-zA-Z0-9]*)$
+    Description: The Amazon Document DB Instance name.
+    Type: String
+  DocumentDBRestoreSnapshot:
+    Description: The snapshot name to restore from.
+    Type: String
+  DocumentDBSecurityGroup:
+    Description: Select the Document database security group.
+    Type: AWS::EC2::SecurityGroup::Id
+  NumberOfSubnets:
+    AllowedValues:
+    - 1
+    - 2
+    Default: 2
+    Description: Number of subnets. This must match your selections in the list of subnets below.
+    Type: String 
+  Subnet:
+    Description: Select existing subnets. The number selected must match the number of subnets above. Subnets selected must be in separate AZs.
+    Type: List<AWS::EC2::Subnet::Id>
+
+Conditions:
+
+  NumberOfSubnets1:
+      !Equals [ 1, !Ref NumberOfSubnets ]
+  NumberOfSubnets2:
+      !Equals [ 2, !Ref NumberOfSubnets ]
+  Subnet0: !Or
+    - !Condition NumberOfSubnets1
+    - !Condition NumberOfSubnets2
+  Subnet1: !Condition NumberOfSubnets2
+  UseAWS-ManagedCMK:
+    !Equals ['', !Ref DocumentDBCmk]
+  NoSnapshot:
+    !Equals ['', !Ref DocumentDBRestoreSnapshot]
+
+Resources:
+
+  DocumentDBCluster:
+    Type: AWS::DocDB::DBCluster
+    Properties:
+      BackupRetentionPeriod: 30
+      DBClusterIdentifier: !Ref DocumentDBClusterName
+      DBSubnetGroupName: !Ref DocumentDBSubnetGroup
+      Port: 27017
+      KmsKeyId:
+        !If [ UseAWS-ManagedCMK, !Ref 'AWS::NoValue', !Ref DocumentDBCmk ]
+      MasterUsername: !If [ NoSnapshot, !Ref DocumentDBMasterUsername, !Ref 'AWS::NoValue']
+      MasterUserPassword: !If [ NoSnapshot, !Ref DocumentDBMasterPassword, !Ref 'AWS::NoValue']
+      StorageEncrypted: !Ref DocumentDBEncrpytedBoolean
+      SnapshotIdentifier: !If [ NoSnapshot, !Ref 'AWS::NoValue', !Ref DocumentDBRestoreSnapshot]
+      Tags:
+        - Key: Name
+          Value: !Join [ '', [ 'SBSINM / ', !Ref 'AWS::StackName' ] ]
+      VpcSecurityGroupIds:
+      - !Ref DocumentDBSecurityGroup
+  DocumentDBInstance0:
+    Type: AWS::DocDB::DBInstance
+    DeletionPolicy: Delete
+    DependsOn: DocumentDBCluster
+    Properties:
+      AutoMinorVersionUpgrade: true
+      DBClusterIdentifier: !Ref DocumentDBClusterName
+      DBInstanceIdentifier: !Join [ '', [ !Ref DocumentDBInstanceName, '0' ] ]
+      DBInstanceClass: !Ref DocumentDBInstanceType
+      Tags:
+        - Key: Name
+          Value: !Join [ '', [ 'DocDB0 / ', !Ref 'AWS::StackName' ] ]
+  DocumentDBInstance1:
+    Type: AWS::DocDB::DBInstance
+    DeletionPolicy: Delete
+    DependsOn: DocumentDBCluster
+    Properties:
+      AutoMinorVersionUpgrade: true
+      DBClusterIdentifier: !Ref DocumentDBClusterName
+      DBInstanceIdentifier: !Join [ '', [ !Ref DocumentDBInstanceName, '1' ] ]
+      DBInstanceClass: !Ref DocumentDBInstanceType
+      Tags:
+        - Key: Name
+          Value: !Join [ '', [ 'DocDB1 / ', !Ref 'AWS::StackName' ] ]
+  DocumentDBSubnetGroup:
+    Type: AWS::DocDB::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: DocDB Database Subnet Group for SBS InM Solution
+      SubnetIds:
+        !If
+          [ NumberOfSubnets1,
+          [ !Select [ 0, !Ref Subnet ] ],
+          [ !Select [ 0, !Ref Subnet ], !Select [ 1, !Ref Subnet ] ]
+          ]
+      Tags:
+        - Key: Name
+          Value: !Join [ '', [ 'SBSINM / ', !Ref 'AWS::StackName' ] ]
+
+Outputs:
+  DocumentDBCluster:
+    Value: !Ref DocumentDBCluster
+  DocumentDBClusterName:
+    Value: !Ref DocumentDBClusterName
+  DocumentDBInstanceName:
+    Value: !Ref DocumentDBInstanceName
+  DocumentDBSubnetGroup:
+    Value: !Ref DocumentDBSubnetGroup
+  DocumentDBClusterEndpoint:
+    Value: !GetAtt DocumentDBCluster.Endpoint
+  DocumentDBClusterPort:
+    Value: !GetAtt DocumentDBCluster.Port

@@ -1,0 +1,209 @@
+---
+AWSTemplateFormatVersion: 2010-09-09
+
+Description: Reference CloudFormation Template for SBS I&M - Creates CloudFront distribution
+
+Metadata:
+
+  Authors:
+    Description: Hakmin Kim (hakmink@amazon.com)
+  License:
+    Description: 'Copyright 2021 Amazon.com, Inc. and its affiliates. All Rights Reserved.
+                  SPDX-License-Identifier: MIT-0'
+
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+    - Label:
+        default: AWS Parameters
+      Parameters:
+        - CloudFrontAcmCertificate
+        - DomainName
+        - PublicAlbDnsName
+        - S3DomainName
+    ParameterLabels:
+      CloudFrontAcmCertificate:
+        default: CloudFront Certificate ARN
+      PublicAlbDnsName:
+        default: Public ALB DNS Name
+      DomainName:
+        default: Domain name
+      S3DomainName:
+        default: S3 Domain name
+Parameters:
+
+  CloudFrontAcmCertificate:
+    AllowedPattern: ^$|(arn:aws:acm:)([a-z0-9/:-])*([a-z0-9])$
+    Description: '[ Optional ] The AWS Certification Manager certificate ARN for the CloudFront distribution certificate.'
+    Type: String
+  PublicAlbDnsName:
+    Description: The public application load balancer dns name.
+    Type: String
+  DomainName:
+    AllowedPattern: ^$|(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]*[a-zA-Z0-9])\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\-]*[A-Za-z0-9])$
+    Description: '[ Optional ] The main domain name of the Web site (e.g. example.com).'
+    Type: String
+  S3DomainName:
+    AllowedPattern: ^$|(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]*[a-zA-Z0-9])\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\-]*[A-Za-z0-9])$
+    Description: '[ Optional ] The main domain name of S3 (e.g. DOC-EXAMPLE-BUCKET.s3-website.us-west-2.amazonaws.com).'
+    Type: String
+
+Conditions:
+
+  SslCertificate:
+    !Not [ !Equals [ '', !Ref CloudFrontAcmCertificate ] ]
+  NoSslCertificate:
+    !Equals [ '', !Ref CloudFrontAcmCertificate ]
+  DomainName:
+    !Not [ !Equals [ '', !Ref DomainName ] ]
+  NoDomainName:
+    !Equals [ '', !Ref DomainName ]
+
+Resources:
+
+  CloudFrontDistributionNoSslCertificate:
+    Type: AWS::CloudFront::Distribution
+    Condition: NoSslCertificate
+    Properties:
+      DistributionConfig:
+        CacheBehaviors:
+        - PathPattern: /*
+          AllowedMethods:
+          - DELETE
+          - GET
+          - HEAD
+          - OPTIONS
+          - PATCH
+          - POST
+          - PUT
+          DefaultTTL: 900
+          MaxTTL: 900
+          MinTTL: 900
+          ForwardedValues:
+            QueryString: true
+            Headers:
+            - Host
+          TargetOriginId: elb
+          ViewerProtocolPolicy: allow-all
+          Compress: true
+        Comment: !Ref 'AWS::StackName'
+        DefaultCacheBehavior:
+          AllowedMethods:
+          - DELETE
+          - GET
+          - HEAD
+          - OPTIONS
+          - PATCH
+          - POST
+          - PUT
+          DefaultTTL: 0
+          MaxTTL: 0
+          MinTTL: 0
+          ForwardedValues:
+            QueryString: true
+            Headers:
+            - '*'
+            Cookies:
+              Forward: all
+          TargetOriginId: elb
+          ViewerProtocolPolicy: allow-all
+          Compress: true
+        Enabled: true
+        Origins:
+        - DomainName: !Ref PublicAlbDnsName
+          Id: elb
+          CustomOriginConfig:
+            OriginProtocolPolicy: http-only
+        PriceClass: PriceClass_100
+  CloudFrontDistributionSslCertificate:
+    Type: AWS::CloudFront::Distribution
+    Condition: SslCertificate
+    Properties:
+      DistributionConfig:
+        CacheBehaviors:
+        - PathPattern: /*
+          AllowedMethods:
+          - DELETE
+          - GET
+          - HEAD
+          - OPTIONS
+          - PATCH
+          - POST
+          - PUT
+          DefaultTTL: 900
+          MaxTTL: 900
+          MinTTL: 900
+          ForwardedValues:
+            QueryString: true
+            Headers:
+            - Host
+          TargetOriginId: elb
+          ViewerProtocolPolicy: redirect-to-https
+          Compress: true
+        Comment: !Ref 'AWS::StackName'
+        DefaultCacheBehavior:
+          AllowedMethods:
+          - DELETE
+          - GET
+          - HEAD
+          - OPTIONS
+          - PATCH
+          - POST
+          - PUT
+          DefaultTTL: 0
+          MaxTTL: 0
+          MinTTL: 0
+          ForwardedValues:
+            QueryString: true
+            Headers:
+            - '*'
+            Cookies:
+              Forward: all
+          TargetOriginId: elb
+          ViewerProtocolPolicy: redirect-to-https
+          Compress: true
+        Enabled: true
+        Origins:
+        - DomainName: !Ref PublicAlbDnsName
+          Id: elb
+          CustomOriginConfig:
+            OriginProtocolPolicy: https-only
+        PriceClass: PriceClass_100
+        ViewerCertificate:
+          AcmCertificateArn: !Ref CloudFrontAcmCertificate
+          SslSupportMethod: sni-only
+          MinimumProtocolVersion: TLSv1
+  CloudFrontDistributionS3:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Origins:
+        - DomainName: !Ref S3DomainName
+          Id: myS3Origin
+          CustomOriginConfig:
+            OriginProtocolPolicy: match-viewer
+        Enabled: 'true'
+        Comment: Some comment
+        DefaultCacheBehavior:
+          AllowedMethods:
+            - DELETE
+            - GET
+            - HEAD
+            - OPTIONS
+            - PATCH
+            - POST
+            - PUT
+          TargetOriginId: myS3Origin
+          ForwardedValues:
+            QueryString: 'false'
+            Cookies:
+              Forward: none
+          ViewerProtocolPolicy: allow-all
+Outputs:
+  DnsEndpoint:
+    Value: !If [ NoSslCertificate, !GetAtt CloudFrontDistributionNoSslCertificate.DomainName, !GetAtt CloudFrontDistributionSslCertificate.DomainName ]
+  DnsHostname:
+    Value: !If [ NoSslCertificate, !Join [ '', [ 'http://', !GetAtt CloudFrontDistributionNoSslCertificate.DomainName ] ], !Join [ '', [ 'https://', !GetAtt CloudFrontDistributionSslCertificate.DomainName ] ] ]
+  S3DnsEndpoint:
+    Value: CloudFrontDistributionS3.DomainName
+  S3DnsHostname:
+    Value: !Join [ '', [ 'http://', !GetAtt CloudFrontDistributionS3.DomainName ] ]
